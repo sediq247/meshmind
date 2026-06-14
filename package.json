@@ -1,0 +1,39 @@
+{
+  "name": "meshmind",
+  "version": "1.0.0",
+  "description": "P2P Distributed AI Mesh for Offline Communities â€” QVAC Hackathon I",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "demo": "bash scripts/demo.sh",
+    "benchmark": "node scripts/benchmark.js",
+    "setup": "bash scripts/setup.sh",
+    "test": "node scripts/test-mock.js",
+    "test:api": "node scripts/test-api.js"
+  },
+  "keywords": [
+    "qvac",
+    "edge-ai",
+    "p2p",
+    "holepunch",
+    "local-first",
+    "privacy",
+    "mesh-network",
+    "decentralized-ai"
+  ],
+  "author": "MeshMind Team",
+  "license": "MIT",
+  "dependencies": {
+    "@qvac/sdk": "^0.1.0",
+    "hyperswarm": "^4.7.14",
+    "hyperdht": "^6.13.1",
+    "b4a": "^1.6.4",
+    "fastify": "^4.28.1",
+    "@fastify/static": "^7.0.4",
+    "@fastify/websocket": "^10.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

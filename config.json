@@ -1,0 +1,32 @@
+{
+  "nodeId": "meshmind-node-1",
+  "gpu": false,
+  "inference": {
+    "defaultModel": "./models/llama-3-8b-instruct-q4_k_m.gguf",
+    "contextSize": 4096,
+    "gpuLayers": 0,
+    "temperature": 0.7,
+    "maxTokens": 512
+  },
+  "rag": {
+    "embeddingModel": "./models/all-minilm-l6-v2-q4_0.gguf",
+    "chunkSize": 512,
+    "chunkOverlap": 50,
+    "topK": 5
+  },
+  "mesh": {
+    "topic": "meshmind-offline-ai-v1",
+    "heartbeatInterval": 5000,
+    "peerTimeout": 15000
+  },
+  "models": {
+    "localModels": {
+      "llama-3-8b": "./models/llama-3-8b-instruct-q4_k_m.gguf",
+      "all-minilm": "./models/all-minilm-l6-v2-q4_0.gguf"
+    }
+  },
+  "dashboard": {
+    "port": 3000,
+    "host": "0.0.0.0"
+  }
+}

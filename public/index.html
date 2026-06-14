@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MeshMind â€” P2P AI Mesh Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0f;
+    --panel: #111118;
+    --border: #1e1e2e;
+    --text: #e0e0e8;
+    --muted: #6b6b80;
+    --accent: #00d4aa;
+    --accent2: #7c3aed;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --success: #10b981;
+  }
+  body {
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,10,15,0.9);
+    backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header h1 {
+    font-size: 20px; font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .header .badge {
+    font-size: 11px; padding: 4px 12px; border-radius: 20px;
+    background: var(--border); color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .header .badge.live {
+    background: rgba(16,185,129,0.1); color: var(--success);
+    border-color: var(--success); animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    padding: 20px 32px;
+    max-width: 1600px; margin: 0 auto;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    overflow: hidden;
+  }
+  .panel.full { grid-column: 1 / -1; }
+  .panel h2 {
+    font-size: 13px; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--muted);
+    margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+  }
+  .panel h2::before {
+    content: ''; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .mesh-canvas {
+    width: 100%; height: 400px;
+    background: var(--bg);
+    border-radius: 8px;
+  }
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  .stat-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-card .value {
+    font-size: 28px; font-weight: 700; color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .stat-card .label {
+    font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .peer-list {
+    max-height: 300px; overflow-y: auto;
+  }
+  .peer-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .peer-item:last-child { border-bottom: none; }
+  .peer-info { display: flex; align-items: center; gap: 12px; }
+  .peer-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700;
+  }
+  .peer-name { font-size: 14px; font-weight: 600; }
+  .peer-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .peer-badge {
+    font-size: 10px; padding: 3px 8px; border-radius: 4px;
+    background: var(--border); color: var(--muted);
+  }
+  .peer-badge.gpu { background: rgba(0,212,170,0.1); color: var(--accent); }
+  .peer-badge.rag { background: rgba(124,58,237,0.1); color: var(--accent2); }
+  .log-terminal {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 12px;
+    line-height: 1.6;
+    max-height: 200px;
+    overflow-y: auto;
+    color: var(--muted);
+  }
+  .log-line { margin-bottom: 4px; }
+  .log-line .time { color: var(--muted); margin-right: 8px; }
+  .log-line .info { color: var(--accent); }
+  .log-line .warn { color: var(--warn); }
+  .log-line .error { color: var(--danger); }
+  .chat-panel {
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .chat-messages {
+    flex: 1;
+    max-height: 300px;
+    overflow-y: auto;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .chat-msg { margin-bottom: 12px; }
+  .chat-msg .sender { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+  .chat-msg .text { color: var(--text); }
+  .chat-msg .text.user { color: var(--accent); }
+  .chat-input-row {
+    display: flex; gap: 8px;
+  }
+  .chat-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+  }
+  .chat-input:focus { border-color: var(--accent); }
+  .chat-btn {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none; border-radius: 8px; padding: 12px 24px;
+    color: white; font-family: inherit; font-size: 13px;
+    font-weight: 600; cursor: pointer; transition: opacity 0.2s;
+  }
+  .chat-btn:hover { opacity: 0.9; }
+  .chat-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .model-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+  }
+  .model-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .model-card .name { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .model-card .meta { font-size: 11px; color: var(--muted); }
+  .model-card .source { font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    display: inline-block; margin-top: 6px;
+  }
+  .source.local { background: rgba(16,185,129,0.1); color: var(--success); }
+  .source.mesh { background: rgba(245,158,11,0.1); color: var(--warn); }
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; padding: 12px 16px; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .header { padding: 16px; }
+    .header h1 { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ðŸ§  MeshMind Dashboard</h1>
+  <div style="display:flex;gap:12px;align-items:center;">
+    <span class="badge" id="nodeId">connecting...</span>
+    <span class="badge live" id="status">â— LIVE</span>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- Stats Row -->
+  <div class="panel full">
+    <h2>Network Overview</h2>
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="value" id="peerCount">0</div>
+        <div class="label">Mesh Peers</div>
+      </div>
+      <div class="stat-card">
+        <div class="value" id="modelCount">0</div>
+        <div class="label">Models Available</div>
+      </div>
+      <div class="stat-card">
+        <div class="value" id="docCount">0</div>
+        <div class="label">Documents Indexed</div>
+      </div>
+      <div class="stat-card">
+        <div class="value" id="uptime">0s</div>
+        <div class="label">Uptime</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mesh Topology -->
+  <div class="panel full">
+    <h2>Mesh Topology</h2>
+    <canvas class="mesh-canvas" id="meshCanvas"></canvas>
+  </div>
+
+  <!-- Peers -->
+  <div class="panel">
+    <h2>Connected Peers</h2>
+    <div class="peer-list" id="peerList">
+      <div class="peer-item">
+        <div class="peer-info">
+          <div class="peer-avatar">?</div>
+          <div>
+            <div class="peer-name">No peers connected</div>
+            <div class="peer-meta">Waiting for mesh discovery...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Models -->
+  <div class="panel">
+    <h2>Model Registry</h2>
+    <div class="model-grid" id="modelGrid">
+      <div class="model-card">
+        <div class="name">No models</div>
+        <div class="meta">Scanning local and mesh...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat -->
+  <div class="panel full">
+    <h2>Inference Playground</h2>
+    <div class="chat-panel">
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-msg">
+          <div class="sender">System</div>
+          <div class="text">Welcome to MeshMind! Type a message to test inference. If this node can't handle it, it will delegate to the best peer in the mesh.</div>
+        </div>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" class="chat-input" id="chatInput" 
+               placeholder="Ask the mesh... (e.g., 'What is edge AI?')" 
+               onkeydown="if(event.key==='Enter')sendMessage()">
+        <button class="chat-btn" id="sendBtn" onclick="sendMessage()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logs -->
+  <div class="panel full">
+    <h2>Event Log</h2>
+    <div class="log-terminal" id="logTerminal">
+      <div class="log-line"><span class="time">--:--:--</span>Connecting to MeshMind node...</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// â??â??â?? Dashboard State â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
+let ws = null
+let nodeId = ''
+let peers = []
+let logs = []
+let canvas, ctx
+let animFrame
+
+// â??â??â?? WebSocket Connection â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
+function connect() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  ws = new WebSocket(`${protocol}//${window.location.host}/api/ws`)
+
+  ws.onopen = () => {
+    log('Connected to MeshMind node', 'info')
+  }
+
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data)
+    if (msg.type === 'init' || msg.type === 'update') {
+      updateDashboard(msg.data)
+    }
+  }
+
+  ws.onerror = () => {
+    log('WebSocket error', 'error')
+    document.getElementById('status').classList.remove('live')
+    document.getElementById('status').textContent = 'â?? OFFLINE'
+  }
+
+  ws.onclose = () => {
+    log('Connection lost, retrying...', 'warn')
+    document.getElementById('status').classList.remove('live')
+    document.getElementById('status').textContent = 'â?? OFFLINE'
+    setTimeout(connect, 3000)
+  }
+}
+
+// â??â??â?? Dashboard Updates â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
+function updateDashboard(data) {
+  nodeId = data.nodeId
+  peers = data.mesh?.peers || []
+
+  document.getElementById('nodeId').textContent = nodeId
+  document.getElementById('peerCount').textContent = data.mesh?.connected || 0
+  document.getElementById('modelCount').textContent = data.models?.total || 0
+  document.getElementById('docCount').textContent = (data.rag?.localDocuments || 0) + (data.rag?.meshDocuments || 0)
+  document.getElementById('uptime').textContent = formatUptime(data.system?.uptime || 0)
+
+  updatePeerList(peers)
+  updateModelGrid(data.models)
+  drawMeshTopology()
+}
+
+function updatePeerList(peers) {
+  const list = document.getElementById('peerList')
+  if (peers.length === 0) {
+    list.innerHTML = `
+      <div class="peer-item">
+        <div class="peer-info">
+          <div class="peer-avatar">?</div>
+          <div>
+            <div class="peer-name">No peers connected</div>
+            <div class="peer-meta">Waiting for mesh discovery...</div>
+          </div>
+        </div>
+      </div>`
+    return
+  }
+
+  list.innerHTML = peers.map(p => `
+    <div class="peer-item">
+      <div class="peer-info">
+        <div class="peer-avatar">${p.id.slice(0,2).toUpperCase()}</div>
+        <div>
+          <div class="peer-name">${p.id}</div>
+          <div class="peer-meta">${p.capabilities?.ram || '?'}MB RAM Â? ${p.capabilities?.gpuLayers || 0} GPU layers</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:4px;">
+        ${p.capabilities?.gpu ? '<span class="peer-badge gpu">GPU</span>' : ''}
+        ${p.capabilities?.canRAG ? '<span class="peer-badge rag">RAG</span>' : ''}
+      </div>
+    </div>
+  `).join('')
+}
+
+function updateModelGrid(models) {
+  const grid = document.getElementById('modelGrid')
+  const all = []
+
+  if (models?.local) {
+    models.local.forEach(m => all.push({ ...m, source: 'local' }))
+  }
+  if (models?.remote) {
+    models.remote.forEach(m => all.push({ ...m, source: 'mesh' }))
+  }
+
+  if (all.length === 0) {
+    grid.innerHTML = `
+      <div class="model-card">
+        <div class="name">No models</div>
+        <div class="meta">Scanning local and mesh...</div>
+      </div>`
+    return
+  }
+
+  grid.innerHTML = all.map(m => `
+    <div class="model-card">
+      <div class="name">${m.id}</div>
+      <div class="meta">${m.size ? formatSize(m.size) : m.peers + ' peers'}</div>
+      <span class="source ${m.source}">${m.source === 'local' ? 'LOCAL' : 'MESH'}</span>
+    </div>
+  `).join('')
+}
+
+// â”€â”€â”€ Mesh Topology Canvas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function initCanvas() {
+  canvas = document.getElementById('meshCanvas')
+  ctx = canvas.getContext('2d')
+  resizeCanvas()
+  window.addEventListener('resize', resizeCanvas)
+  animate()
+}
+
+function resizeCanvas() {
+  const rect = canvas.parentElement.getBoundingClientRect()
+  canvas.width = rect.width - 4
+  canvas.height = 400
+}
+
+function drawMeshTopology() {
+  if (!ctx) return
+
+  const w = canvas.width
+  const h = canvas.height
+  const cx = w / 2
+  const cy = h / 2
+
+  ctx.clearRect(0, 0, w, h)
+
+  // Background grid
+  ctx.strokeStyle = '#1a1a2e'
+  ctx.lineWidth = 1
+  for (let x = 0; x < w; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke()
+  }
+  for (let y = 0; y < h; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke()
+  }
+
+  // Draw connections between all peers
+  const allNodes = [{ id: nodeId, x: cx, y: cy, isSelf: true }]
+  const radius = Math.min(w, h) * 0.35
+  const angleStep = (Math.PI * 2) / Math.max(peers.length, 1)
+
+  peers.forEach((p, i) => {
+    const angle = i * angleStep - Math.PI / 2
+    allNodes.push({
+      id: p.id,
+      x: cx + Math.cos(angle) * radius,
+      y: cy + Math.sin(angle) * radius,
+      isSelf: false,
+      gpu: p.capabilities?.gpu
+    })
+  })
+
+  // Draw connection lines
+  ctx.strokeStyle = 'rgba(0,212,170,0.15)'
+  ctx.lineWidth = 2
+  for (let i = 0; i < allNodes.length; i++) {
+    for (let j = i + 1; j < allNodes.length; j++) {
+      ctx.beginPath()
+      ctx.moveTo(allNodes[i].x, allNodes[i].y)
+      ctx.lineTo(allNodes[j].x, allNodes[j].y)
+      ctx.stroke()
+    }
+  }
+
+  // Draw animated data packets
+  const time = Date.now() / 1000
+  ctx.fillStyle = 'rgba(0,212,170,0.6)'
+  for (let i = 0; i < allNodes.length; i++) {
+    for (let j = i + 1; j < allNodes.length; j++) {
+      const t = (time + i * 0.5) % 1
+      const px = allNodes[i].x + (allNodes[j].x - allNodes[i].x) * t
+      const py = allNodes[i].y + (allNodes[j].y - allNodes[i].y) * t
+      ctx.beginPath()
+      ctx.arc(px, py, 3, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+
+  // Draw nodes
+  allNodes.forEach(node => {
+    const r = node.isSelf ? 28 : 22
+
+    // Glow
+    const gradient = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, r * 2)
+    if (node.isSelf) {
+      gradient.addColorStop(0, 'rgba(0,212,170,0.3)')
+      gradient.addColorStop(1, 'rgba(0,212,170,0)')
+    } else if (node.gpu) {
+      gradient.addColorStop(0, 'rgba(124,58,237,0.3)')
+      gradient.addColorStop(1, 'rgba(124,58,237,0)')
+    } else {
+      gradient.addColorStop(0, 'rgba(107,107,128,0.2)')
+      gradient.addColorStop(1, 'rgba(107,107,128,0)')
+    }
+    ctx.fillStyle = gradient
+    ctx.beginPath()
+    ctx.arc(node.x, node.y, r * 2, 0, Math.PI * 2)
+    ctx.fill()
+
+    // Node circle
+    ctx.beginPath()
+    ctx.arc(node.x, node.y, r, 0, Math.PI * 2)
+    ctx.fillStyle = node.isSelf ? '#00d4aa' : (node.gpu ? '#7c3aed' : '#1e1e2e')
+    ctx.fill()
+    ctx.strokeStyle = node.isSelf ? '#00d4aa' : (node.gpu ? '#7c3aed' : '#3a3a4e')
+    ctx.lineWidth = 2
+    ctx.stroke()
+
+    // Inner dot
+    ctx.beginPath()
+    ctx.arc(node.x, node.y, r * 0.3, 0, Math.PI * 2)
+    ctx.fillStyle = node.isSelf ? '#0a0a0f' : (node.gpu ? '#fff' : '#6b6b80')
+    ctx.fill()
+
+    // Label
+    ctx.fillStyle = '#e0e0e8'
+    ctx.font = '11px monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText(node.isSelf ? nodeId.slice(0, 8) : node.id.slice(0, 8), node.x, node.y + r + 18)
+  })
+
+  // Center label
+  ctx.fillStyle = 'rgba(0,212,170,0.5)'
+  ctx.font = '10px monospace'
+  ctx.textAlign = 'center'
+  ctx.fillText('MESH NETWORK', cx, h - 20)
+}
+
+function animate() {
+  drawMeshTopology()
+  animFrame = requestAnimationFrame(animate)
+}
+
+// â”€â”€â”€ Chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+async function sendMessage() {
+  const input = document.getElementById('chatInput')
+  const btn = document.getElementById('sendBtn')
+  const text = input.value.trim()
+  if (!text) return
+
+  addChatMessage('You', text, 'user')
+  input.value = ''
+  btn.disabled = true
+  btn.textContent = 'Thinking...'
+
+  try {
+    // Use streaming WebSocket for inference
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const streamWs = new WebSocket(`${protocol}//${window.location.host}/api/infer/stream`)
+
+    let responseText = ''
+    const msgDiv = document.createElement('div')
+    msgDiv.className = 'chat-msg'
+    msgDiv.innerHTML = '<div class="sender">MeshMind</div><div class="text" id="streaming"></div>'
+    document.getElementById('chatMessages').appendChild(msgDiv)
+    const streamingEl = msgDiv.querySelector('#streaming')
+
+    streamWs.onopen = () => {
+      streamWs.send(JSON.stringify({ prompt: text, maxTokens: 512 }))
+    }
+
+    streamWs.onmessage = (event) => {
+      const chunk = JSON.parse(event.data)
+      if (chunk.type === 'chunk') {
+        responseText += chunk.content
+        streamingEl.textContent = responseText
+        streamingEl.scrollIntoView({ behavior: 'smooth' })
+      } else if (chunk.type === 'error') {
+        streamingEl.textContent = 'Error: ' + chunk.error
+        streamWs.close()
+      }
+      if (chunk.done) {
+        streamWs.close()
+      }
+    }
+
+    streamWs.onerror = () => {
+      streamingEl.textContent = 'Error: Could not connect to inference stream'
+    }
+
+    streamWs.onclose = () => {
+      btn.disabled = false
+      btn.textContent = 'Send'
+    }
+
+  } catch (err) {
+    addChatMessage('System', 'Error: ' + err.message, 'error')
+    btn.disabled = false
+    btn.textContent = 'Send'
+  }
+}
+
+function addChatMessage(sender, text, type) {
+  const container = document.getElementById('chatMessages')
+  const div = document.createElement('div')
+  div.className = 'chat-msg'
+  div.innerHTML = `<div class="sender">${sender}</div><div class="text ${type || ''}">${escapeHtml(text)}</div>`
+  container.appendChild(div)
+  container.scrollTop = container.scrollHeight
+}
+
+// â”€â”€â”€ Utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function log(message, type = 'info') {
+  const now = new Date()
+  const time = now.toTimeString().slice(0, 8)
+  const terminal = document.getElementById('logTerminal')
+  const line = document.createElement('div')
+  line.className = 'log-line'
+  line.innerHTML = `<span class="time">${time}</span><span class="${type}">${escapeHtml(message)}</span>`
+  terminal.appendChild(line)
+  terminal.scrollTop = terminal.scrollHeight
+
+  // Keep only last 100 lines
+  while (terminal.children.length > 100) {
+    terminal.removeChild(terminal.firstChild)
+  }
+}
+
+function formatUptime(seconds) {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor(seconds % 60)
+  if (h > 0) return `${h}h ${m}m`
+  if (m > 0) return `${m}m ${s}s`
+  return `${s}s`
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + 'B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB'
+  if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + 'MB'
+  return (bytes / 1024 / 1024 / 1024).toFixed(1) + 'GB'
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+// â??â??â?? Init â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
+connect()
+initCanvas()
+</script>
+
+</body>
+</html>
