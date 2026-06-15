@@ -40,13 +40,13 @@ export class MeshMindInference extends EventEmitter {
       this.emit('ready')
     } catch (err) {
       console.error('[Inference] Failed to initialize:', err.message)
-      // Don't throw â€” node can still participate as a client
+      // Don't throw — node can still participate as a client
       this.isReady = false
     }
   }
 
   /**
-   * Complete a prompt â€” either locally or via delegation
+   * Complete a prompt — either locally or via delegation
    */
   async complete(prompt, options = {}) {
     const requestId = this._generateId()
@@ -68,7 +68,7 @@ export class MeshMindInference extends EventEmitter {
   }
 
   /**
-   * Stream a completion â€” returns an async iterator
+   * Stream a completion — returns an async iterator
    */
   async *stream(prompt, options = {}) {
     const requestId = this._generateId()
@@ -163,7 +163,7 @@ export class MeshMindInference extends EventEmitter {
     }
   }
 
-  // â”€â”€â”€ Private Methods â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Private Methods ───────────────────────────────────────────
 
   async _completeLocal(prompt, options, requestId) {
     const result = await this.qvac.createCompletion(this.model, {

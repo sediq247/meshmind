@@ -17,9 +17,9 @@ async function testREST() {
     try {
       const res = await fetch(`${BASE_URL}${endpoint}`)
       const data = await res.json()
-      console.log(`  âœ… ${endpoint}:`, JSON.stringify(data).slice(0, 100))
+      console.log(`  ✅ ${endpoint}:`, JSON.stringify(data).slice(0, 100))
     } catch (err) {
-      console.log(`  âŒ ${endpoint}:`, err.message)
+      console.log(`  ❌ ${endpoint}:`, err.message)
     }
   }
 }
@@ -37,9 +37,9 @@ async function testInference() {
       })
     })
     const data = await res.json()
-    console.log('  âœ… Inference response:', data.text?.slice(0, 100) || data.error)
+    console.log('  ✅ Inference response:', data.text?.slice(0, 100) || data.error)
   } catch (err) {
-    console.log('  âŒ Inference failed:', err.message)
+    console.log('  ❌ Inference failed:', err.message)
   }
 }
 
@@ -50,25 +50,25 @@ async function testWebSocket() {
     const ws = new WebSocket(`${WS_URL}/api/ws`)
 
     ws.on('open', () => {
-      console.log('  âœ… WebSocket connected')
+      console.log('  ✅ WebSocket connected')
     })
 
     ws.on('message', (data) => {
       const msg = JSON.parse(data)
       if (msg.type === 'init') {
-        console.log('  âœ… Initial state received:', msg.data.nodeId)
+        console.log('  ✅ Initial state received:', msg.data.nodeId)
         ws.close()
         resolve()
       }
     })
 
     ws.on('error', (err) => {
-      console.log('  âŒ WebSocket error:', err.message)
+      console.log('  ❌ WebSocket error:', err.message)
       resolve()
     })
 
     setTimeout(() => {
-      console.log('  âš ï¸ WebSocket timeout')
+      console.log('  ⚠️ WebSocket timeout')
       ws.close()
       resolve()
     }, 5000)
@@ -76,7 +76,7 @@ async function testWebSocket() {
 }
 
 async function main() {
-  console.log('ðŸ§  MeshMind API Test Suite')
+  console.log('🧠 MeshMind API Test Suite')
   console.log('===========================')
   console.log(`Target: ${BASE_URL}`)
   console.log('')
@@ -88,7 +88,7 @@ async function main() {
   await testWebSocket()
 
   console.log('')
-  console.log('âœ… Test complete')
+  console.log('✅ Test complete')
 }
 
 main().catch(err => {

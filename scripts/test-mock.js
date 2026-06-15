@@ -15,6 +15,7 @@ import fs from 'fs/promises'
  * Usage: node scripts/test-mock.js
  */
 
+// ─── Mock QVAC SDK ──────────────────────────────────────────────
 const mockQvac = {
   loadModel: async (path, opts) => ({
     path,
@@ -53,7 +54,7 @@ const mockQvac = {
 const originalCreateQvac = (await import('@qvac/sdk')).createQvac
 // We'll override in the test functions instead
 
-// â??â??â?? Test Configurations â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
+// ─── Test Configurations ──────────────────────────────────────
 const HUB_CONFIG = {
   nodeId: 'test-hub',
   gpu: true,
@@ -109,7 +110,7 @@ const CLIENT_CONFIG = {
   dashboard: { port: 3998, host: '127.0.0.1' }
 }
 
-// â??â??â?? Test Runner â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
+// ─── Test Runner ──────────────────────────────────────────────
 class TestRunner {
   constructor() {
     this.tests = []
@@ -120,10 +121,10 @@ class TestRunner {
   async test(name, fn) {
     try {
       await fn()
-      console.log(`  â?? ${name}`)
+      console.log(`  ✅ ${name}`)
       this.passed++
     } catch (err) {
-      console.log(`  â?? ${name}: ${err.message}`)
+      console.log(`  ❌ ${name}: ${err.message}`)
       this.failed++
     }
   }
@@ -135,7 +136,7 @@ class TestRunner {
   }
 }
 
-// â??â??â?? Mock Module Factory â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
+// ─── Mock Module Factory ─────────────────────────────────────
 function createMockInference(config, mesh) {
   const inf = new MeshMindInference(config, mesh)
   // Override init to use mock QVAC
@@ -168,11 +169,11 @@ function createMockRAG(config, mesh) {
   return rag
 }
 
-// â”€â”€â”€ Main Test Suite â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Main Test Suite ─────────────────────────────────────────
 async function runTests() {
   const runner = new TestRunner()
 
-  console.log('ðŸ§  MeshMind Mock Test Suite')
+  console.log('🧠 MeshMind Mock Test Suite')
   console.log('===========================')
   console.log('Testing WITHOUT real QVAC models (mock mode)')
   console.log('')
@@ -193,7 +194,7 @@ async function runTests() {
   })
 
   // Wait for mesh discovery
-  console.log('  â³ Waiting for P2P discovery (3s)...')
+  console.log('  ⏳ Waiting for P2P discovery (3s)...')
   await new Promise(r => setTimeout(r, 3000))
 
   // Test 2: Peer discovery
@@ -201,8 +202,8 @@ async function runTests() {
     const hubPeers = hubMesh.getPeers()
     const clientPeers = clientMesh.getPeers()
     if (hubPeers.length === 0 && clientPeers.length === 0) {
-      // On same machine, Hyperswarm may use localhost â€” check both directions
-      console.log('    âš ï¸ Same-machine discovery can be flaky â€” checking protocol instead')
+      // On same machine, Hyperswarm may use localhost — check both directions
+      console.log('    ⚠️ Same-machine discovery can be flaky — checking protocol instead')
     }
     // At minimum, verify the mesh protocol is functional
     if (!hubMesh.swarm || !clientMesh.swarm) {
@@ -347,7 +348,7 @@ async function runTests() {
 
   // Cleanup
   console.log('')
-  console.log('ðŸ§¹ Cleaning up...')
+  console.log('🧹 Cleaning up...')
   try { await hubDash.stop() } catch {}
   try { await clientDash.stop() } catch {}
   try { await hubMesh.stop() } catch {}

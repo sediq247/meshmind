@@ -134,7 +134,7 @@ export class MeshMindModels {
     return { local, remote, total: local.length + remote.length }
   }
 
-  // â”€â”€â”€ Private Methods â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Private Methods ───────────────────────────────────────────
 
   _formatSize(bytes) {
     if (bytes < 1024) return `${bytes}B`

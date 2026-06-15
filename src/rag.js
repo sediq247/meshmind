@@ -163,7 +163,7 @@ Based on the above context, answer the following question:
     }
   }
 
-  // â”€â”€â”€ Private Methods â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Private Methods ───────────────────────────────────────────
 
   _chunkText(text) {
     const chunkSize = this.config.rag?.chunkSize || 512
@@ -204,7 +204,7 @@ Based on the above context, answer the following question:
 
     if (peers.length === 0) return []
 
-    // For now, return empty â€” mesh RAG sync is push-based via RAG_SYNC messages
+    // For now, return empty — mesh RAG sync is push-based via RAG_SYNC messages
     // Peers proactively share their knowledge, we don't query-pull
     return []
   }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MeshMind â€” P2P AI Mesh Dashboard</title>
+<title>MeshMind — P2P AI Mesh Dashboard</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -209,10 +209,10 @@
 <body>
 
 <div class="header">
-  <h1>ðŸ§  MeshMind Dashboard</h1>
+  <h1>🧠 MeshMind Dashboard</h1>
   <div style="display:flex;gap:12px;align-items:center;">
     <span class="badge" id="nodeId">connecting...</span>
-    <span class="badge live" id="status">â— LIVE</span>
+    <span class="badge live" id="status">● LIVE</span>
   </div>
 </div>
 
@@ -304,7 +304,7 @@
 </div>
 
 <script>
-// â??â??â?? Dashboard State â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
+// ─── Dashboard State ───────────────────────────────────────────
 let ws = null
 let nodeId = ''
 let peers = []
@@ -312,7 +312,7 @@ let logs = []
 let canvas, ctx
 let animFrame
 
-// â??â??â?? WebSocket Connection â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
+// ─── WebSocket Connection ──────────────────────────────────────
 function connect() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   ws = new WebSocket(`${protocol}//${window.location.host}/api/ws`)
@@ -331,18 +331,18 @@ function connect() {
   ws.onerror = () => {
     log('WebSocket error', 'error')
     document.getElementById('status').classList.remove('live')
-    document.getElementById('status').textContent = 'â?? OFFLINE'
+    document.getElementById('status').textContent = '● OFFLINE'
   }
 
   ws.onclose = () => {
     log('Connection lost, retrying...', 'warn')
     document.getElementById('status').classList.remove('live')
-    document.getElementById('status').textContent = 'â?? OFFLINE'
+    document.getElementById('status').textContent = '● OFFLINE'
     setTimeout(connect, 3000)
   }
 }
 
-// â??â??â?? Dashboard Updates â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
+// ─── Dashboard Updates ─────────────────────────────────────────
 function updateDashboard(data) {
   nodeId = data.nodeId
   peers = data.mesh?.peers || []
@@ -380,7 +380,7 @@ function updatePeerList(peers) {
         <div class="peer-avatar">${p.id.slice(0,2).toUpperCase()}</div>
         <div>
           <div class="peer-name">${p.id}</div>
-          <div class="peer-meta">${p.capabilities?.ram || '?'}MB RAM Â? ${p.capabilities?.gpuLayers || 0} GPU layers</div>
+          <div class="peer-meta">${p.capabilities?.ram || '?'}MB RAM · ${p.capabilities?.gpuLayers || 0} GPU layers</div>
         </div>
       </div>
       <div style="display:flex;gap:4px;">
@@ -420,7 +420,7 @@ function updateModelGrid(models) {
   `).join('')
 }
 
-// â”€â”€â”€ Mesh Topology Canvas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Mesh Topology Canvas ──────────────────────────────────────
 function initCanvas() {
   canvas = document.getElementById('meshCanvas')
   ctx = canvas.getContext('2d')
@@ -552,7 +552,7 @@ function animate() {
   animFrame = requestAnimationFrame(animate)
 }
 
-// â”€â”€â”€ Chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Chat ──────────────────────────────────────────────────────
 async function sendMessage() {
   const input = document.getElementById('chatInput')
   const btn = document.getElementById('sendBtn')
@@ -620,7 +620,7 @@ function addChatMessage(sender, text, type) {
   container.scrollTop = container.scrollHeight
 }
 
-// â”€â”€â”€ Utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Utilities ─────────────────────────────────────────────────
 function log(message, type = 'info') {
   const now = new Date()
   const time = now.toTimeString().slice(0, 8)
@@ -659,7 +659,7 @@ function escapeHtml(text) {
   return div.innerHTML
 }
 
-// â??â??â?? Init â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
+// ─── Init ──────────────────────────────────────────────────────
 connect()
 initCanvas()
 </script>

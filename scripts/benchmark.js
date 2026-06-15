@@ -14,7 +14,7 @@ import fs from 'fs/promises'
 const RESULTS_FILE = './benchmark-results.json'
 
 async function benchmark() {
-  console.log('ðŸ§  MeshMind Benchmark Suite')
+  console.log('🧠 MeshMind Benchmark Suite')
   console.log('===========================')
   console.log('')
 
@@ -65,16 +65,16 @@ async function benchmark() {
   // Save results
   await fs.writeFile(RESULTS_FILE, JSON.stringify(results, null, 2))
   console.log('')
-  console.log(`âœ… Benchmark complete. Results saved to ${RESULTS_FILE}`)
+  console.log(`✅ Benchmark complete. Results saved to ${RESULTS_FILE}`)
   console.log('')
   console.log('Summary:')
-  console.log(`  â€¢ Mesh discovery: ${results.tests.meshDiscovery.firstPeerMs}ms`)
-  console.log(`  â€¢ Inference latency: ${results.tests.inference.localLatencyMs}ms (local) / ${results.tests.inference.delegatedLatencyMs}ms (delegated)`)
-  console.log(`  â€¢ RAG throughput: ${results.tests.rag.throughput} chunks/sec`)
-  console.log(`  â€¢ Memory overhead: ${formatBytes(results.tests.memory.delta)}`)
+  console.log(`  • Mesh discovery: ${results.tests.meshDiscovery.firstPeerMs}ms`)
+  console.log(`  • Inference latency: ${results.tests.inference.localLatencyMs}ms (local) / ${results.tests.inference.delegatedLatencyMs}ms (delegated)`)
+  console.log(`  • RAG throughput: ${results.tests.rag.throughput} chunks/sec`)
+  console.log(`  • Memory overhead: ${formatBytes(results.tests.memory.delta)}`)
 }
 
-// â”€â”€â”€ Benchmark Implementations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Benchmark Implementations ───────────────────────────────────
 
 async function runSystemBaseline() {
   const os = await import('os')
@@ -162,6 +162,7 @@ async function runMemoryBenchmark() {
   }
 }
 
+// ─── Utilities ─────────────────────────────────────────────────
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
