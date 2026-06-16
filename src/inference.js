@@ -1,99 +1,77 @@
-import { createQvac } from '@qvac/sdk'
+import { loadModel, completion, unloadModel } from '@qvac/sdk'
 import { EventEmitter } from 'events'
 
 /**
  * MeshMind Inference Engine
  * 
- * Handles local inference via QVAC SDK and delegated inference
- * across the mesh. Streams responses back to requesters.
+ * Handles local inference via QVAC SDK and delegated inference across the mesh.
  */
 export class MeshMindInference extends EventEmitter {
   constructor(config, mesh) {
     super()
     this.config = config
     this.mesh = mesh
-    this.qvac = null
-    this.model = null
+    this.modelId = null
+    this.modelPath = null
     this.isReady = false
-    this.pendingRequests = new Map() // requestId -> { resolve, reject, chunks: [] }
+    this.pendingRequests = new Map()
   }
 
-  /**
-   * Initialize QVAC SDK and load the default model
-   */
   async init() {
+    const modelPath = this.config.inference?.defaultModel
+    if (!modelPath) {
+      console.log(`[Inference] ${this.config.nodeId}: No model configured, acting as client`)
+      this.isReady = false
+      return
+    }
+
     try {
-      this.qvac = await createQvac()
-      console.log('[Inference] QVAC SDK initialized')
-
-      // Load default model if available
-      const modelPath = this.config.inference?.defaultModel
-      if (modelPath) {
-        this.model = await this.qvac.loadModel(modelPath, {
-          contextSize: this.config.inference?.contextSize || 4096,
-          gpuLayers: this.config.inference?.gpuLayers || 0
-        })
-        console.log(`[Inference] Model loaded: ${modelPath}`)
-      }
-
+      this.modelId = await loadModel({
+        modelSrc: modelPath,
+        modelType: 'llm',
+        onProgress: (p) => {
+          if (p.percent) console.log(`[Inference] Loading model: ${p.percent}%`)
+        }
+      })
+      this.modelPath = modelPath
       this.isReady = true
       this.emit('ready')
+      console.log(`[Inference] ${this.config.nodeId}: Model loaded — ${modelPath}`)
     } catch (err) {
-      console.error('[Inference] Failed to initialize:', err.message)
-      // Don't throw — node can still participate as a client
+      console.error(`[Inference] ${this.config.nodeId}: Failed to load model:`, err.message)
       this.isReady = false
     }
   }
 
-  /**
-   * Complete a prompt — either locally or via delegation
-   */
   async complete(prompt, options = {}) {
     const requestId = this._generateId()
-    const preferredModel = options.model || this.config.inference?.defaultModel
-
-    // Try local first if capable
-    if (this.isReady && this.model) {
+    if (this.isReady && this.modelId) {
       return this._completeLocal(prompt, options, requestId)
     }
-
-    // Delegate to best peer
-    const bestPeer = this.mesh.findBestPeer(preferredModel)
+    const bestPeer = this.mesh.findBestPeer()
     if (!bestPeer) {
       throw new Error('No capable peer found for inference. Mesh may be empty.')
     }
-
     console.log(`[Inference] Delegating request ${requestId} to peer: ${bestPeer}`)
     return this._delegateInference(bestPeer, prompt, options, requestId)
   }
 
-  /**
-   * Stream a completion — returns an async iterator
-   */
   async *stream(prompt, options = {}) {
     const requestId = this._generateId()
-    const preferredModel = options.model || this.config.inference?.defaultModel
-
-    if (this.isReady && this.model) {
+    if (this.isReady && this.modelId) {
       yield* this._streamLocal(prompt, options, requestId)
       return
     }
-
-    const bestPeer = this.mesh.findBestPeer(preferredModel)
+    const bestPeer = this.mesh.findBestPeer()
     if (!bestPeer) {
       throw new Error('No capable peer found for streaming inference.')
     }
-
     yield* this._delegateStream(bestPeer, prompt, options, requestId)
   }
 
-  /**
-   * Handle an incoming inference request from a peer
-   */
   async handleRemoteRequest(request) {
     const { requestId, prompt, options, from } = request
-
-    if (!this.isReady || !this.model) {
+    if (!this.isReady || !this.modelId) {
       this.mesh.sendTo(from, {
         type: 'INFERENCE_ERROR',
         requestId,
@@ -101,28 +79,27 @@ export class MeshMindInference extends EventEmitter {
       })
       return
     }
-
     try {
-      const stream = this.qvac.createCompletion(this.model, {
-        prompt,
+      const history = [{ role: 'user', content: prompt }]
+      const result = completion({
+        modelId: this.modelId,
+        history,
+        stream: true,
         maxTokens: options.maxTokens || this.config.inference?.maxTokens || 512,
-        temperature: options.temperature || this.config.inference?.temperature || 0.7,
-        stream: true
+        temperature: options.temperature || this.config.inference?.temperature || 0.7
       })
-
-      for await (const chunk of stream) {
+      for await (const token of result.tokenStream) {
         this.mesh.sendTo(from, {
           type: 'INFERENCE_CHUNK',
           requestId,
-          content: chunk.content || chunk.text || '',
-          done: chunk.done || false
+          content: token,
+          done: false
         })
       }
-
       this.mesh.sendTo(from, {
         type: 'INFERENCE_END',
         requestId,
-        stats: { tokensGenerated: stream.tokensGenerated || 0 }
+        stats: { tokensGenerated: result.tokensGenerated || 0 }
       })
     } catch (err) {
       console.error(`[Inference] Remote request ${requestId} failed:`, err.message)
@@ -134,20 +111,15 @@ export class MeshMindInference extends EventEmitter {
     }
   }
 
-  /**
-   * Handle incoming inference responses (chunks, end, error)
-   */
   handleRemoteResponse(response) {
     const { requestId, type } = response
     const pending = this.pendingRequests.get(requestId)
     if (!pending) return
-
     switch (type) {
       case 'INFERENCE_CHUNK':
         pending.chunks.push(response.content)
         if (pending.onChunk) pending.onChunk(response.content)
         break
-
       case 'INFERENCE_END':
         pending.resolve({
           text: pending.chunks.join(''),
@@ -155,7 +127,6 @@ export class MeshMindInference extends EventEmitter {
         })
         this.pendingRequests.delete(requestId)
         break
-
       case 'INFERENCE_ERROR':
         pending.reject(new Error(response.error))
         this.pendingRequests.delete(requestId)
@@ -163,42 +134,52 @@ export class MeshMindInference extends EventEmitter {
     }
   }
 
-  // ─── Private Methods ───────────────────────────────────────────
+  async destroy() {
+    if (this.modelId) {
+      try {
+        await unloadModel({ modelId: this.modelId })
+        console.log(`[Inference] ${this.config.nodeId}: Model unloaded`)
+      } catch (err) {
+        console.error(`[Inference] Failed to unload model:`, err.message)
+      }
+    }
+  }
 
   async _completeLocal(prompt, options, requestId) {
-    const result = await this.qvac.createCompletion(this.model, {
-      prompt,
+    const history = [{ role: 'user', content: prompt }]
+    const result = completion({
+      modelId: this.modelId,
+      history,
+      stream: false,
       maxTokens: options.maxTokens || this.config.inference?.maxTokens || 512,
       temperature: options.temperature || this.config.inference?.temperature || 0.7
     })
-
+    const text = await result.text
     return {
-      text: result.text || result.content || '',
-      stats: { tokensGenerated: result.tokensGenerated || 0 },
+      text,
+      stats: { tokensGenerated: text?.length || 0 },
       local: true
     }
   }
 
   async *_streamLocal(prompt, options, requestId) {
-    const stream = this.qvac.createCompletion(this.model, {
-      prompt,
+    const history = [{ role: 'user', content: prompt }]
+    const result = completion({
+      modelId: this.modelId,
+      history,
+      stream: true,
       maxTokens: options.maxTokens || this.config.inference?.maxTokens || 512,
-      temperature: options.temperature || this.config.inference?.temperature || 0.7,
-      stream: true
+      temperature: options.temperature || this.config.inference?.temperature || 0.7
     })
-
-    for await (const chunk of stream) {
-      yield {
-        content: chunk.content || chunk.text || '',
-        done: chunk.done || false
-      }
+    for await (const token of result.tokenStream) {
+      yield { content: token, done: false }
     }
+    yield { content: '', done: true }
   }
 
   async _delegateInference(peerId, prompt, options, requestId) {
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(requestId, { resolve, reject, chunks: [] })
-
       this.mesh.sendTo(peerId, {
         type: 'INFERENCE_REQUEST',
         requestId,
@@ -207,8 +188,6 @@ export class MeshMindInference extends EventEmitter {
         from: this.config.nodeId,
         timestamp: Date.now()
       })
-
-      // Timeout after 60s
       setTimeout(() => {
         if (this.pendingRequests.has(requestId)) {
           this.pendingRequests.delete(requestId)
@@ -222,14 +201,12 @@ export class MeshMindInference extends EventEmitter {
     const chunks = []
     let done = false
     let error = null
-
     this.pendingRequests.set(requestId, {
       chunks,
       onChunk: (c) => { chunks.push(c) },
       resolve: () => { done = true },
       reject: (e) => { error = e; done = true }
     })
-
     this.mesh.sendTo(peerId, {
       type: 'INFERENCE_REQUEST',
       requestId,
@@ -238,11 +215,8 @@ export class MeshMindInference extends EventEmitter {
       from: this.config.nodeId,
       timestamp: Date.now()
     })
-
-    // Yield chunks as they arrive
     let yielded = 0
     const timeout = Date.now() + 60000
-
     while (!done && Date.now() < timeout) {
       while (yielded < chunks.length) {
         yield { content: chunks[yielded] }
@@ -250,10 +224,8 @@ export class MeshMindInference extends EventEmitter {
       }
       await new Promise(r => setTimeout(r, 10))
     }
-
     if (error) throw error
     if (!done) throw new Error('Stream timed out')
-
     this.pendingRequests.delete(requestId)
   }
 
