@@ -1,129 +1,235 @@
-import fs from 'fs/promises'
-import { MeshMindMesh } from './mesh.js'
-import { MeshMindInference } from './inference.js'
-import { MeshMindRAG } from './rag.js'
-import { MeshMindModels } from './models.js'
-import { MeshMindDashboard } from './dashboard.js'
+import { loadModel, completion, unloadModel, isMock } from './qvac-sdk-mock.js'
+import { EventEmitter } from 'events'
 
 /**
- * MeshMind — P2P Distributed AI Mesh for Offline Communities
+ * MeshMind Inference Engine
  * 
- * Main entry point. Initializes all subsystems and wires them together.
+ * Uses QVAC SDK (or mock fallback) for on-device inference and mesh delegation.
  */
-async function main() {
-  // Load config
-  let config = {}
-  try {
-    const configRaw = await fs.readFile('./config.json', 'utf8')
-    config = JSON.parse(configRaw)
-  } catch (err) {
-    console.warn('[Main] Could not load config.json, using defaults')
-    config = {
-      nodeId: `meshmind-${Math.random().toString(36).slice(2, 8)}`,
-      gpu: false,
-      mesh: { topic: 'meshmind-offline-ai-v1', heartbeatInterval: 5000, peerTimeout: 15000 },
-      dashboard: { port: 3000, host: '0.0.0.0' }
+export class MeshMindInference extends EventEmitter {
+  constructor(config, mesh) {
+    super()
+    this.config = config
+    this.mesh = mesh
+    this.modelId = null
+    this.modelPath = null
+    this.isReady = false
+    this.pendingRequests = new Map()
+  }
+
+  async init() {
+    const modelPath = this.config.inference?.defaultModel
+    if (!modelPath) {
+      console.log(`[Inference] ${this.config.nodeId}: No model configured, acting as client`)
+      this.isReady = false
+      return
+    }
+
+    try {
+      this.modelId = await loadModel({
+        modelSrc: modelPath,
+        modelType: 'llm',
+        onProgress: (p) => {
+          if (p.percent) console.log(`[Inference] Loading model: ${p.percent}%`)
+        }
+      })
+      this.modelPath = modelPath
+      this.isReady = true
+      this.emit('ready')
+      console.log(`[Inference] ${this.config.nodeId}: Model loaded — ${modelPath}${isMock ? ' (MOCK)' : ''}`)
+    } catch (err) {
+      console.error(`[Inference] ${this.config.nodeId}: Failed to load model:`, err.message)
+      this.isReady = false
     }
   }
 
-  // Override with env vars (for demo script)
-  if (process.env.NODE_ID) config.nodeId = process.env.NODE_ID
-  if (process.env.GPU) config.gpu = process.env.GPU === 'true'
-  if (process.env.GPU_LAYERS) config.inference = { ...config.inference, gpuLayers: parseInt(process.env.GPU_LAYERS) }
-  if (process.env.PORT) config.dashboard = { ...config.dashboard, port: parseInt(process.env.PORT) }
-
-  console.log(`
-╔═══════════════════════════════════════════════════════════════╗
-║                                                               ║
-║   🧠 MESHMIND — P2P Distributed AI Mesh                        ║
-║   QVAC Hackathon I — Unleash Edge AI                          ║
-║                                                               ║
-║   Node: ${config.nodeId.padEnd(51)} ║
-║   GPU:  ${(config.gpu ? 'YES' : 'NO').padEnd(51)} ║
-║   Port: ${(config.dashboard?.port || 3000).toString().padEnd(51)} ║
-║                                                               ║
-╚═══════════════════════════════════════════════════════════════╝
-`)
-
-  // ─── Initialize Subsystems ─────────────────────────────────────
-
-  // 1. Mesh (P2P networking)
-  const mesh = new MeshMindMesh(config)
-
-  // 2. Inference engine
-  const inference = new MeshMindInference(config, mesh)
-
-  // 3. RAG engine
-  const rag = new MeshMindRAG(config, mesh)
-
-  // 4. Model registry
-  const models = new MeshMindModels(config, mesh)
-
-  // 5. Dashboard
-  const dashboard = new MeshMindDashboard(config, mesh, inference, rag, models)
-
-  // ─── Wire Up Event Handlers ────────────────────────────────────
-
-  // Mesh events -> Inference
-  mesh.on('inference:request', (req) => {
-    inference.handleRemoteRequest(req)
-  })
-
-  mesh.on('inference:response', (res) => {
-    inference.handleRemoteResponse(res)
-  })
-
-  // Mesh events -> Models
-  mesh.on('model:query', () => {
-    models.announce()
-  })
-
-  mesh.on('model:available', (msg) => {
-    models.handleRemoteAvailable(msg)
-  })
-
-  // Mesh events -> RAG
-  mesh.on('rag:sync', (msg) => {
-    rag.handleRemoteSync(msg)
-  })
-
-  // ─── Start Everything ────────────────────────────────────────
-
-  try {
-    await mesh.start()
-    await inference.init()
-    await rag.init()
-    await models.scanLocal()
-    models.announce()
-    await dashboard.start()
-
-    console.log('[Main] ✅ MeshMind fully operational')
-    console.log('[Main] Press Ctrl+C to stop')
-
-    // Announce models periodically
-    setInterval(() => models.announce(), 30000)
-
-    // Query mesh for models on startup
-    setTimeout(() => models.queryMesh(), 5000)
-
-  } catch (err) {
-    console.error('[Main] ❌ Failed to start:', err.message)
-    process.exit(1)
+  async complete(prompt, options = {}) {
+    const requestId = this._generateId()
+    if (this.isReady && this.modelId) {
+      return this._completeLocal(prompt, options, requestId)
+    }
+    const bestPeer = this.mesh.findBestPeer()
+    if (!bestPeer) {
+      throw new Error('No capable peer found for inference. Mesh may be empty.')
+    }
+    console.log(`[Inference] Delegating request ${requestId} to peer: ${bestPeer}`)
+    return this._delegateInference(bestPeer, prompt, options, requestId)
   }
 
-  // ─── Graceful Shutdown ────────────────────────────────────────
+  async *stream(prompt, options = {}) {
+    const requestId = this._generateId()
+    if (this.isReady && this.modelId) {
+      yield* this._streamLocal(prompt, options, requestId)
+      return
+    }
+    const bestPeer = this.mesh.findBestPeer()
+    if (!bestPeer) {
+      throw new Error('No capable peer found for streaming inference.')
+    }
+    yield* this._delegateStream(bestPeer, prompt, options, requestId)
+  }
 
-  process.on('SIGINT', async () => {
-    console.log('
-[Main] 🛑 Shutting down MeshMind...')
-    await dashboard.stop()
-    await mesh.stop()
-    console.log('[Main] 👋 Goodbye')
-    process.exit(0)
-  })
+  async handleRemoteRequest(request) {
+    const { requestId, prompt, options, from } = request
+    if (!this.isReady || !this.modelId) {
+      this.mesh.sendTo(from, {
+        type: 'INFERENCE_ERROR',
+        requestId,
+        error: 'This node cannot perform inference (no model loaded)'
+      })
+      return
+    }
+    try {
+      const history = [{ role: 'user', content: prompt }]
+      const result = completion({
+        modelId: this.modelId,
+        history,
+        stream: true,
+        maxTokens: options.maxTokens || this.config.inference?.maxTokens || 512,
+        temperature: options.temperature || this.config.inference?.temperature || 0.7
+      })
+      for await (const token of result.tokenStream) {
+        this.mesh.sendTo(from, {
+          type: 'INFERENCE_CHUNK',
+          requestId,
+          content: token,
+          done: false
+        })
+      }
+      this.mesh.sendTo(from, {
+        type: 'INFERENCE_END',
+        requestId,
+        stats: { tokensGenerated: result.tokensGenerated || 0 }
+      })
+    } catch (err) {
+      console.error(`[Inference] Remote request ${requestId} failed:`, err.message)
+      this.mesh.sendTo(from, {
+        type: 'INFERENCE_ERROR',
+        requestId,
+        error: err.message
+      })
+    }
+  }
+
+  handleRemoteResponse(response) {
+    const { requestId, type } = response
+    const pending = this.pendingRequests.get(requestId)
+    if (!pending) return
+    switch (type) {
+      case 'INFERENCE_CHUNK':
+        pending.chunks.push(response.content)
+        if (pending.onChunk) pending.onChunk(response.content)
+        break
+      case 'INFERENCE_END':
+        pending.resolve({
+          text: pending.chunks.join(''),
+          stats: response.stats
+        })
+        this.pendingRequests.delete(requestId)
+        break
+      case 'INFERENCE_ERROR':
+        pending.reject(new Error(response.error))
+        this.pendingRequests.delete(requestId)
+        break
+    }
+  }
+
+  async destroy() {
+    if (this.modelId) {
+      try {
+        await unloadModel({ modelId: this.modelId })
+        console.log(`[Inference] ${this.config.nodeId}: Model unloaded`)
+      } catch (err) {
+        console.error(`[Inference] Failed to unload model:`, err.message)
+      }
+    }
+  }
+
+  async _completeLocal(prompt, options, requestId) {
+    const history = [{ role: 'user', content: prompt }]
+    const result = completion({
+      modelId: this.modelId,
+      history,
+      stream: false,
+      maxTokens: options.maxTokens || this.config.inference?.maxTokens || 512,
+      temperature: options.temperature || this.config.inference?.temperature || 0.7
+    })
+    const text = await result.text
+    return {
+      text,
+      stats: { tokensGenerated: text?.length || 0 },
+      local: true
+    }
+  }
+
+  async *_streamLocal(prompt, options, requestId) {
+    const history = [{ role: 'user', content: prompt }]
+    const result = completion({
+      modelId: this.modelId,
+      history,
+      stream: true,
+      maxTokens: options.maxTokens || this.config.inference?.maxTokens || 512,
+      temperature: options.temperature || this.config.inference?.temperature || 0.7
+    })
+    for await (const token of result.tokenStream) {
+      yield { content: token, done: false }
+    }
+    yield { content: '', done: true }
+  }
+
+  async _delegateInference(peerId, prompt, options, requestId) {
+    return new Promise((resolve, reject) => {
+      this.pendingRequests.set(requestId, { resolve, reject, chunks: [] })
+      this.mesh.sendTo(peerId, {
+        type: 'INFERENCE_REQUEST',
+        requestId,
+        prompt,
+        options,
+        from: this.config.nodeId,
+        timestamp: Date.now()
+      })
+      setTimeout(() => {
+        if (this.pendingRequests.has(requestId)) {
+          this.pendingRequests.delete(requestId)
+          reject(new Error('Inference request timed out'))
+        }
+      }, 60000)
+    })
+  }
+
+  async *_delegateStream(peerId, prompt, options, requestId) {
+    const chunks = []
+    let done = false
+    let error = null
+    this.pendingRequests.set(requestId, {
+      chunks,
+      onChunk: (c) => { chunks.push(c) },
+      resolve: () => { done = true },
+      reject: (e) => { error = e; done = true }
+    })
+    this.mesh.sendTo(peerId, {
+      type: 'INFERENCE_REQUEST',
+      requestId,
+      prompt,
+      options,
+      from: this.config.nodeId,
+      timestamp: Date.now()
+    })
+    let yielded = 0
+    const timeout = Date.now() + 60000
+    while (!done && Date.now() < timeout) {
+      while (yielded < chunks.length) {
+        yield { content: chunks[yielded] }
+        yielded++
+      }
+      await new Promise(r => setTimeout(r, 10))
+    }
+    if (error) throw error
+    if (!done) throw new Error('Stream timed out')
+    this.pendingRequests.delete(requestId)
+  }
+
+  _generateId() {
+    return `inf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  }
 }
-
-main().catch(err => {
-  console.error('[Main] Fatal error:', err)
-  process.exit(1)
-})
