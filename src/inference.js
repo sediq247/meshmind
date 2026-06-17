@@ -1,10 +1,10 @@
-import { loadModel, completion, unloadModel } from '@qvac/sdk'
+import { loadModel, completion, unloadModel, isMock } from './qvac-sdk-mock.js'
 import { EventEmitter } from 'events'
 
 /**
  * MeshMind Inference Engine
  * 
- * Handles local inference via QVAC SDK and delegated inference across the mesh.
+ * Uses QVAC SDK (or mock fallback) for on-device inference and mesh delegation.
  */
 export class MeshMindInference extends EventEmitter {
   constructor(config, mesh) {
@@ -36,7 +36,7 @@ export class MeshMindInference extends EventEmitter {
       this.modelPath = modelPath
       this.isReady = true
       this.emit('ready')
-      console.log(`[Inference] ${this.config.nodeId}: Model loaded — ${modelPath}`)
+      console.log(`[Inference] ${this.config.nodeId}: Model loaded — ${modelPath}${isMock ? ' (MOCK)' : ''}`)
     } catch (err) {
       console.error(`[Inference] ${this.config.nodeId}: Failed to load model:`, err.message)
       this.isReady = false
