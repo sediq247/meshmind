@@ -57,8 +57,7 @@ export class MeshMindMesh extends EventEmitter {
   }
 
   broadcast(message) {
-    const data = b4a.from(JSON.stringify(message) + '
-')
+    const data = b4a.from(JSON.stringify(message) + '\n')
     for (const [peerId, peer] of this.peers) {
       try {
         peer.socket.write(data)
@@ -74,8 +73,7 @@ export class MeshMindMesh extends EventEmitter {
       throw new Error(`Peer ${peerId} not found in mesh`)
     }
     try {
-      peer.socket.write(b4a.from(JSON.stringify(message) + '
-'))
+      peer.socket.write(b4a.from(JSON.stringify(message) + '\n'))
     } catch (err) {
       console.error(`[MeshMind] Failed to send to ${peerId}:`, err.message)
       throw err
