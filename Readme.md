@@ -1,10 +1,5 @@
-# MeshMind — Build Details & Project Story
+# MeshMind
 
-> **QVAC Hackathon I — Unleash Edge AI**  
-> Track: General Purpose Devices | Tinkerer  
-> Submission Date: June 21, 2026
-
----
 
 ## 🎯 The Vision
 
